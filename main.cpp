@@ -40,14 +40,17 @@ int main()
     j["device_os_name"] = "A06AVNT";
     j["platform"] = "android5";
 
-    j["body"][0]["tag"] = 3;
-    j["body"][0]["service_id"] = "0x10C0";
-    j["body"][0]["service_interface_id"] = "0x0001";
-    j["body"][0]["fault_time_stamp"] = 1647253105799;
-    j["body"][0]["fault_code"] = 51380242;
-    j["body"][0]["fault_string"] = "大数据预处理文件压缩故障";
-    j["body"][0]["fault_reason"] = "unable to locate the component";
-    j["body"][0]["fault_detail"] = "";
+    json j_body;
+    j_body["tag"] = 3;
+    j_body["service_id"] = "0x10C0";
+    j_body["service_interface_id"] = "0x0001";
+    j_body["fault_time_stamp"] = 1647253105799;
+    j_body["fault_code"] = 51380242;
+    j_body["fault_string"] = "大数据预处理文件压缩故障";
+    j_body["fault_reason"] = "unable to locate the component";
+    j_body["fault_detail"] = "";
+
+    j["body"].push_back(j_body);
 
     std::string data = j.dump();
     std::string destChar;
