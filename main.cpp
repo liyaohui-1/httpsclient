@@ -1,5 +1,6 @@
 #include <memory>
 #include "https_client.h"
+#include "zlib.h"
 
 int main()
 {
@@ -26,6 +27,23 @@ int main()
     }
  
     std::string data= {"{ { \"timestamp\":1647253105799, \"hardware_version\":\"A.1\", \"sottware_version\":\"S.181020.V5.22.R\", \"account_id\":\"0M300OCAVR183\", \"device_id\":\"GAC5846515\", \"device_brand\":\"德赛\", \"device_os_name\":\"A06AVNT\", \"platform\":\"android5\", \"body\":[ { \"tag\":3, \"service_id\":\"0x10C0\", \"service_interface_id\":\"0x0001\", \"fault_time_stamp\":1647253105799, \"fault_code\":51380242, \"fault_string\":\"大数据预处理文件压缩故障\", \"fault_reason\":\"unable to locate the component\", \"fault_detail\":\"\" } ] } }" };
+    std::string destChar;
+    unsigned long nread,nwrite;
+
+    nread = data.length();
+    nwrite = compressBound(nread);
+
+    if (compress((Bytef*)destChar.c_str(), &nwrite, (const Bytef*)data.c_str(), nread) != Z_OK)
+    {
+        printf("compress error occur.\n");
+        return -2;
+    }
+    else
+    {
+        printf("srcChar:{%s}.\n",data.c_str());
+        printf("destChar:{%s}.\n",destChar.c_str());
+    }
+
     if (client.SendData(data.c_str())) 
     {
         std::cout << "Send data Successed!" << std::endl;
