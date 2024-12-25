@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.10)
+
+project(demo_https_client)
+
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/output)
+
+include_directories(${CMAKE_SOURCE_DIR}/../install/include)
+link_directories(${CMAKE_SOURCE_DIR}/../install/lib)
+
+set(SRC_FILES ./main.cpp https_client.cpp)
+
+add_executable(${PROJECT_NAME} ${SRC_FILES})
+target_link_libraries(${PROJECT_NAME} curl)
