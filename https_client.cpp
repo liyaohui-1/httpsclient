@@ -36,6 +36,11 @@ void HttpsClient::SetUrlAndHeader(const std::string& url, const HttpHeader& head
     headers_ = curl_slist_append(headers_, (std::string{"standardVersion:"}+header.standardVersion).c_str());
 }
 
+void HttpsClient::RegisterCallback(const WriteCallback& callback)
+{
+    cb = callback;
+}
+
 bool HttpsClient::Init()
 {
     if (!curl_handle_) 
@@ -57,6 +62,7 @@ bool HttpsClient::Init()
     {
         curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER, headers_);
         curl_easy_setopt(curl_handle_, CURLOPT_URL, url_.c_str());
+        curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION, cb);
     } 
     else 
     {
@@ -69,7 +75,7 @@ bool HttpsClient::Init()
 
 bool HttpsClient::SendData(const char* data)
 {
-    std::cout << "Sending data to " << url_ << "data: " << data <<" begin!" <<std::endl;
+    std::cout << "Sending data to " << url_ << " data: " << data <<" begin!" <<std::endl;
     curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
 
     CURLcode res = curl_easy_perform(curl_handle_);
@@ -79,6 +85,6 @@ bool HttpsClient::SendData(const char* data)
                 curl_easy_strerror(res));
         return false;
     }
-    std::cout << "Sending data to " << url_ << "data: " << data <<" end!" << std::endl;
+    std::cout << std::endl << "Sending data to " << url_ << " data: " << data <<" end!" << std::endl;
     return true;
 }

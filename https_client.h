@@ -20,6 +20,7 @@ typedef struct{
 
 class HttpsClient
 {
+    using WriteCallback = size_t (*)(void*, size_t, size_t, void*);
 public:
 #if HTTPS
     HttpsClient(const std::string& ca_certificate_path);
@@ -29,6 +30,8 @@ public:
     HttpsClient(const HttpsClient&) = delete;
     HttpsClient& operator=(const HttpsClient&) = delete;
     ~HttpsClient();
+
+    void RegisterCallback(const WriteCallback& cb);
  
 #if HTTPS
     获取单例实例
@@ -72,6 +75,7 @@ private:
     std::string ca_certificate_path_;
 #endif
     std::string url_;
+    WriteCallback cb;
 };
 
 #endif

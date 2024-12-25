@@ -15,6 +15,7 @@ int main()
     header.standardVersion = "2.0";
 
     client.SetUrlAndHeader(std::string{"http://8.135.10.183:11476"}, header);    //需要设定实际的url串
+    client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata){ return size * nmemb;});
         
     if(!client.Init())
     {
@@ -31,6 +32,7 @@ int main()
     unsigned long nread,nwrite;
 
     nread = data.length();
+    destChar.resize(nread);
     nwrite = compressBound(nread);
 
     if (compress((Bytef*)destChar.c_str(), &nwrite, (const Bytef*)data.c_str(), nread) != Z_OK)
@@ -44,7 +46,7 @@ int main()
         printf("destChar:{%s}.\n",destChar.c_str());
     }
 
-    if (client.SendData(data.c_str())) 
+    if (client.SendData(destChar.c_str())) 
     {
         std::cout << "Send data Successed!" << std::endl;
     } 
