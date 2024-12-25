@@ -6,6 +6,7 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/output)
 
 include_directories(${CMAKE_SOURCE_DIR}/../install/include)
 include_directories(${CMAKE_SOURCE_DIR}/../install_zlib/include)
+include_directories(${CMAKE_SOURCE_DIR}/../)
 
 link_directories(${CMAKE_SOURCE_DIR}/../install/lib)
 link_directories(${CMAKE_SOURCE_DIR}/../install_zlib/lib)
