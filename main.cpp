@@ -67,7 +67,10 @@ int main()
         std::cout << "destChar: " << destChar << std::endl;
     }
 
-    if (client.SendData(destChar.c_str())) 
+    std::string base64 = base64_encode(destChar);
+    std::cout << "base64: " << base64 << std::endl;
+
+    if (client.SendData(base64.c_str())) 
     {
         std::cout << "Send data Successed!" << std::endl;
     } 
