@@ -1,9 +1,12 @@
+#include <fstream>
 #include <memory>
 #include "https_client.h"
 #include "compress.h"
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
+
+static constexpr const uint8_t MAX_SEND_TIMES = 3;
 
 int main()
 {
@@ -56,6 +59,7 @@ int main()
 
     std::string data = j.dump();
     std::string destChar;
+    static json j_resend;
 
     if(!compress_string(data, destChar))
     {
@@ -70,14 +74,36 @@ int main()
     std::string base64 = base64_encode(destChar);
     std::cout << "base64: " << base64 << std::endl;
 
-    if (client.SendData(base64.c_str())) 
+    for(uint32_t send_times = 1; send_times <= MAX_SEND_TIMES; send_times++)
     {
-        std::cout << "Send data Successed!" << std::endl;
-    } 
-    else 
-    {
-        // 重发多次失败之后保存为补发文件
-        std::cerr << "Failed to send data" << std::endl;
+        if (client.SendData(base64.c_str())) 
+        {
+            std::cout << "Send data Successed!" << std::endl;
+            break;
+        } 
+        else 
+        {
+            std::cout << "Failed to send data times: " << send_times << std::endl;
+        }
+
+        if(send_times == MAX_SEND_TIMES)
+        {
+            // 重发多次失败之后保存为补发文件(暂定为重发MAX_SEND_TIMES次之后)
+            std::cout << "Failed to send data, save to resend file." << std::endl;
+            // 保存为补发文件格式：域名_域内节点名_业务类型_功能模块 ID_功能触发ID_时间_分包符_结束包符_0
+            std::string resend_file_name = "example.com_node123_serviceA_module001_trigger005_20231005143000_001_010_0";
+            j_resend["array"].push_back(base64);
+            std::cout << "resend data: " << j_resend.dump(4) << std::endl;
+
+            std::ofstream ofs(resend_file_name, std::ios::out | std::ios::binary);
+            if(!ofs.is_open())
+            {
+                std::cout << "Failed to open file: " << resend_file_name << std::endl;
+                return 0;
+            }
+            ofs << j_resend.dump(4);
+            ofs.close();
+        }
     }
 
     return 0;

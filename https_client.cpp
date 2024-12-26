@@ -64,9 +64,10 @@ bool HttpsClient::Init()
 
     if (!url_.empty()) 
     {
-        curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER, headers_);
-        curl_easy_setopt(curl_handle_, CURLOPT_URL, url_.c_str());
-        curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION, cb);
+        curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER,      headers_);
+        curl_easy_setopt(curl_handle_, CURLOPT_URL,             url_.c_str());
+        curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION,   cb);
+        curl_easy_setopt(curl_handle_, CURLOPT_TIMEOUT,         1);
     } 
     else 
     {
