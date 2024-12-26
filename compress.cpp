@@ -5,8 +5,8 @@ bool compress_string(const std::string& src_string, std::string& dst_string)
     unsigned long nread,nwrite;
 
     nread = src_string.length();
-    dst_string.resize(nread);
     nwrite = compressBound(nread);
+    dst_string.resize(nwrite);
 
     if (compress((Bytef*)dst_string.c_str(), &nwrite, (const Bytef*)src_string.c_str(), nread) != Z_OK)
     {
