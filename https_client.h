@@ -64,7 +64,8 @@ public:
 public:
     bool Init();
 
-    void SetUrlAndHeader(const std::string& url, const HttpHeader& header);
+    void SetUrl(const std::string& url);
+    void SetHeader(const HttpHeader& header);
 
     bool SendData(const char* data);
 

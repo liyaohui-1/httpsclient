@@ -23,10 +23,13 @@ HttpsClient::~HttpsClient()
     curl_global_cleanup();
 }
 
-void HttpsClient::SetUrlAndHeader(const std::string& url, const HttpHeader& header)
+void HttpsClient::SetUrl(const std::string& url)
 {
     url_ = url;
+}
 
+void HttpsClient::SetHeader(const HttpHeader& header)
+{
     headers_ = curl_slist_append(headers_, "Content-Type:application/json");
     headers_ = curl_slist_append(headers_, "Accept:application/json");
     headers_ = curl_slist_append(headers_, (std::string{"vin:"}+header.vin).c_str());
@@ -35,6 +38,7 @@ void HttpsClient::SetUrlAndHeader(const std::string& url, const HttpHeader& head
     headers_ = curl_slist_append(headers_, (std::string{"version:"}+header.version).c_str());
     headers_ = curl_slist_append(headers_, (std::string{"standardVersion:"}+header.standardVersion).c_str());
 }
+
 
 void HttpsClient::RegisterCallback(const WriteCallback& callback)
 {

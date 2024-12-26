@@ -13,11 +13,13 @@ int main()
     HttpHeader header;
     header.vin = "LNAAAAAAAP5012345";
     header.domain = 1;
-    header.compressType = "0";
+    header.compressType = "1";
     header.version = "2.001";
     header.standardVersion = "2.0";
 
-    client.SetUrlAndHeader(std::string{"http://8.135.10.183:11476"}, header);    //需要设定实际的url串
+    client.SetUrl(std::string{"http://8.135.10.183:11476"});    //需要设定实际的url串
+    client.SetHeader(header);
+
     client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata){ return size * nmemb;});
         
     if(!client.Init())
@@ -50,7 +52,7 @@ int main()
     j_body["fault_reason"] = "unable to locate the component";
     j_body["fault_detail"] = "";
 
-    j["body"].push_back(j_body);
+    j["datas"].push_back(j_body);
 
     std::string data = j.dump();
     std::string destChar;
@@ -79,6 +81,7 @@ int main()
     } 
     else 
     {
+        // 重发多次失败之后保存为补发文件
         std::cerr << "Failed to send data" << std::endl;
     }
 
