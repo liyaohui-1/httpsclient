@@ -5,7 +5,6 @@
 #include <memory>
 #include <mutex>
 #include <iostream>
-#include <sstream>
 #include "curl/curl.h"
 
 #define HTTPS 0
