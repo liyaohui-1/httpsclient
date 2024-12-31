@@ -10,8 +10,7 @@ static constexpr const uint8_t MAX_SEND_TIMES = 3;
 
 int main()
 {
-    // HttpsClient& client = HttpsClient::getInstance("/path/to/ca_certificate.pem");  //需要设定实际的CA证书
-    HttpsClient& client = HttpsClient::getInstance();  
+    HttpsClient client = HttpsClient{"./ca_tmp.pem"};  //需要设定实际的CA证书
 
     HttpHeader header;
     header.vin = "LNAAAAAAAP5012345";
@@ -20,10 +19,16 @@ int main()
     header.version = "2.001";
     header.standardVersion = "2.0";
 
-    client.SetUrl(std::string{"http://8.135.10.183:11476"});    //需要设定实际的url串
+    client.SetUrl(std::string{"https://www.baidu.com"});  //测试用百度
+    // client.SetUrl(std::string{"https://bc-v2c-eea2-servicedatasync.gacicv.com/"});
     client.SetHeader(header);
 
-    client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata){ return size * nmemb;});
+    client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata)
+    {
+        std::cout << "recv data: " << std::string((char*)ptr, size * nmemb) << std::endl;
+        return size * nmemb;
+    }
+    );
         
     if(!client.Init())
     {
@@ -34,7 +39,7 @@ int main()
     {
         std::cout << "client.Init() Successed!" << std::endl;
     }
-    
+/* 
     json j; // 首先创建一个空的json对象
     j["timestamp"] = 1647253105799;
     j["hardware_version"] = "A.1";
@@ -95,7 +100,7 @@ int main()
             j_resend["array"].push_back(base64);
             std::cout << "resend data: " << j_resend.dump(4) << std::endl;
 
-            std::ofstream ofs(resend_file_name, std::ios::out | std::ios::binary);
+            std::ofstream ofs(resend_file_name, std::ios::app | std::ios::binary);
             if(!ofs.is_open())
             {
                 std::cout << "Failed to open file: " << resend_file_name << std::endl;
@@ -105,6 +110,17 @@ int main()
             ofs.close();
         }
     }
+*/
+
+    if(client.GetApi())
+    {
+        std::cout << "GetApi Successed!" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to GetApi!" << std::endl;
+    }
+
 
     return 0;
 }

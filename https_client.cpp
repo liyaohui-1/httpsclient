@@ -1,18 +1,10 @@
 #include "https_client.h"
 
-#if HTTPS
-// HttpsClient::HttpsClient(const std::string& ca_certificate_path)
-//         : ca_certificate_path_(ca_certificate_path), curl_handle_(nullptr) 
-// {
-
-// }
-#else
-HttpsClient::HttpsClient() 
-    : curl_handle_(nullptr) 
+HttpsClient::HttpsClient(const std::string& ca_certificate_path)
+        : ca_certificate_path_(ca_certificate_path), curl_handle_(nullptr) 
 {
 
 }
-#endif
 
 HttpsClient::~HttpsClient()
 {
@@ -56,11 +48,22 @@ bool HttpsClient::Init()
             return false;
         }
     }
-#if HTTPS
-    curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl_handle_, CURLOPT_CAINFO, ca_certificate_path_.c_str());
-#endif
+    
+    if(access(ca_certificate_path_.c_str(), F_OK) != -1)
+    {
+        // 如果有服务端的CA证书，则启用SSL验证
+        std::cout << "Using CA certificate file: " << ca_certificate_path_ << std::endl;
+        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, true);
+        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, true);
+        curl_easy_setopt(curl_handle_, CURLOPT_CAINFO, ca_certificate_path_.c_str());
+    }
+    else
+    {
+        // 如果没有服务端的CA证书，则跳过SSL验证
+        std::cout << "Warning: CA certificate file not found, skipping SSL verification" << std::endl;
+        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, false);
+        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, false);
+    }
 
     if (!url_.empty()) 
     {
@@ -91,5 +94,16 @@ bool HttpsClient::SendData(const char* data)
         return false;
     }
     std::cout << std::endl << "Sending data to " << url_ <<" end!" << std::endl;
+    return true;
+}
+
+bool HttpsClient::GetApi()
+{
+    CURLcode res = curl_easy_perform(curl_handle_);
+    if(res)
+    {
+        std::cout << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+        return false;
+    }
     return true;
 }
