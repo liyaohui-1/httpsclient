@@ -25,7 +25,7 @@ int main()
 
     client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata)
     {
-        std::cout << "recv data: " << std::string((char*)ptr, size * nmemb) << std::endl;
+        std::cout << "recv data: " << std::string((char*)ptr, size * nmemb);
         return size * nmemb;
     }
     );
@@ -39,7 +39,7 @@ int main()
     {
         std::cout << "client.Init() Successed!" << std::endl;
     }
-/* 
+
     json j; // 首先创建一个空的json对象
     j["timestamp"] = 1647253105799;
     j["hardware_version"] = "A.1";
@@ -110,8 +110,8 @@ int main()
             ofs.close();
         }
     }
-*/
 
+/*
     if(client.GetApi())
     {
         std::cout << "GetApi Successed!" << std::endl;
@@ -121,6 +121,8 @@ int main()
         std::cout << "Failed to GetApi!" << std::endl;
     }
 
+    compress_zipdir("test/","./test.zip",nullptr);
+*/
 
     return 0;
 }

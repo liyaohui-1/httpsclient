@@ -29,6 +29,7 @@ int getFileCrc(const char* filenameinzip, char* buf, unsigned long size_buf, uns
 	}
 
 	if (err == ZIP_OK)
+    {
 		do
 		{
 			err = ZIP_OK;
@@ -47,15 +48,16 @@ int getFileCrc(const char* filenameinzip, char* buf, unsigned long size_buf, uns
 				calculate_crc = crc32_z(calculate_crc,(const Bytef *)buf, size_read);
             }
 		} while ((err == ZIP_OK) && (size_read > 0));
+    }
 
-		if (fin)
-        {
-			fclose(fin);
-        }
+    if (fin)
+    {
+        fclose(fin);
+    }
 
-		*result_crc = calculate_crc;
-		printf("file %s crc %lx\n", filenameinzip, calculate_crc);
-		return err;
+    *result_crc = calculate_crc;
+    printf("file %s crc %lx\n", filenameinzip, calculate_crc);
+    return err;
 }
 
 int compress_zipAddFile(const std::string& file, zipFile& zf,const char *pw)
@@ -102,7 +104,8 @@ int compress_addDir(const std::string& sourcePath, zipFile& zf, const char* pw) 
     }
  
     struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
+    while ((entry = readdir(dir)) != nullptr) 
+    {
         // 忽略 "." 和 ".."
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) 
         {

@@ -93,7 +93,7 @@ bool HttpsClient::SendData(const char* data)
                 curl_easy_strerror(res));
         return false;
     }
-    std::cout << std::endl << "Sending data to " << url_ <<" end!" << std::endl;
+    std::cout << "Sending data to " << url_ <<" end!" << std::endl;
     return true;
 }
 
