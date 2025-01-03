@@ -4,8 +4,9 @@
 #include <string>
 #include <iostream>
 #include <unistd.h>
+#include <vector>
 #include <thread>
-#include <future>
+#include <atomic>
 #include "curl/curl.h"
 
 typedef struct HttpHeader{
@@ -18,33 +19,34 @@ typedef struct HttpHeader{
 
 class HttpsClient
 {
-    using WriteCallback = size_t (*)(void*, size_t, size_t, void*);
 public:
     HttpsClient(const std::string& ca_certificate_path);
     ~HttpsClient();
 
-    void RegisterCallback(const WriteCallback& cb);
-
 public:
-    bool Init();
-
     void SetUrl(const std::string& url);
     void SetHeader(const HttpHeader& header);
 
-    void StartSendData(const std::string& data);
-    std::future<bool> GetSendResult();
+    bool AddRequest(const std::string& postData);
+    void StartPerformRequests();
 
 private:
-    void SendData(const std::string& data);
+    bool InitCURLHandle(CURL* curl_handle);
+    void PerformRequests();
+
+    static size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) 
+    {
+        return size * nmemb;
+    }
+
+    std::vector<CURL*> curlHandles_;
+    std::atomic<CURLM*> multiHandle_;
 
     curl_slist* headers_ {nullptr};
     std::string ca_certificate_path_;
     std::string url_;
-
-    CURL *curl_handle_;
-    WriteCallback cb;
+    
     std::thread workerThread_;
-    std::promise<bool> send_result_;
 };
 
 #endif // HTTPS_CLIENT_H_

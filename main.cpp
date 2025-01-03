@@ -10,8 +10,7 @@ static constexpr const uint8_t MAX_SEND_TIMES = 3;
 
 int main()
 {
-    HttpsClient client {"./ca_tmp.pem"};  //需要设定实际的CA证书
-
+    HttpsClient client {"ca_certificate_path"};
     HttpHeader header;
     header.vin = "LNAAAAAAAP5012345";
     header.domain = 1;
@@ -22,23 +21,6 @@ int main()
     client.SetUrl(std::string{"https://www.baidu.com"});  //测试用百度
     // client.SetUrl(std::string{"https://bc-v2c-eea2-servicedatasync.gacicv.com/"});
     client.SetHeader(header);
-
-    client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata)
-    {
-        std::cout << "recv data: " << std::string((char*)ptr, size * nmemb);
-        return size * nmemb;
-    }
-    );
-        
-    if(!client.Init())
-    {
-        std::cout << "client.Init() Failed!" << std::endl;
-        return 0;
-    }
-    else
-    {
-        std::cout << "client.Init() Successed!" << std::endl;
-    }
 
     json j; // 首先创建一个空的json对象
     j["timestamp"] = 1647253105799;
@@ -79,17 +61,23 @@ int main()
     std::string base64 = base64_encode(destChar);
     std::cout << "base64: " << base64 << std::endl;
 
+    client.AddRequest(base64.c_str());
+
+    client.StartPerformRequests();
+
+    std::cout << "Waiting for requests to complete..." << std::endl;
+
+    /*
     for(uint32_t send_times = 1; send_times <= MAX_SEND_TIMES; send_times++)
     {
-        client.StartSendData(base64);
-        if(client.GetSendResult().get())
+        if (client.SendData(base64.c_str())) 
         {
             std::cout << "Send data Successed!" << std::endl;
             break;
-        } 
-        else 
+        }
+        else
         {
-            std::cout << "Failed to send data times: " << send_times << std::endl;
+            std::cout << "Failed to PerformRequests send data times: " << send_times << std::endl;
         }
 
         if(send_times == MAX_SEND_TIMES)
@@ -111,6 +99,20 @@ int main()
             ofs.close();
         }
     }
+    */
+
+/*
+    if(client.GetApi())
+    {
+        std::cout << "GetApi Successed!" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to GetApi!" << std::endl;
+    }
+
+    compress_zipdir("test/","./test.zip",nullptr);
+*/
 
     return 0;
 }

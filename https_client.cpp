@@ -1,22 +1,29 @@
 #include "https_client.h"
 
 HttpsClient::HttpsClient(const std::string& ca_certificate_path)
-        : ca_certificate_path_(ca_certificate_path), curl_handle_(nullptr) 
+        : ca_certificate_path_(ca_certificate_path) 
 {
-
+    curl_global_init(CURL_GLOBAL_ALL);
+    multiHandle_ = curl_multi_init();
 }
 
 HttpsClient::~HttpsClient()
 {
-    if(curl_handle_)
+    for (auto& handle : curlHandles_) 
     {
-	    curl_easy_cleanup(curl_handle_);
+        if (handle) 
+        {
+            curl_multi_remove_handle(multiHandle_, handle);
+            curl_easy_cleanup(handle);
+        }
     }
+    curl_multi_cleanup(multiHandle_);
+    curl_global_cleanup();
+
     if(workerThread_.joinable())
     {
         workerThread_.join();
     }
-    curl_global_cleanup();
 }
 
 void HttpsClient::SetUrl(const std::string& url)
@@ -35,46 +42,27 @@ void HttpsClient::SetHeader(const HttpHeader& header)
     headers_ = curl_slist_append(headers_, (std::string{"standardVersion:"}+header.standardVersion).c_str());
 }
 
-
-void HttpsClient::RegisterCallback(const WriteCallback& callback)
+bool HttpsClient::InitCURLHandle(CURL* curl_handle)
 {
-    cb = callback;
-}
-
-bool HttpsClient::Init()
-{
-    if (!curl_handle_) 
-    { 
-        curl_handle_ = curl_easy_init();
-        if(!curl_handle_)
-        {
-            throw std::runtime_error("Failed to initialize libcurl");
-            return false;
-        }
-    }
-    
     if(access(ca_certificate_path_.c_str(), F_OK) != -1)
     {
         // 如果有服务端的CA证书，则启用SSL验证
         std::cout << "Using CA certificate file: " << ca_certificate_path_ << std::endl;
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, true);
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, true);
-        curl_easy_setopt(curl_handle_, CURLOPT_CAINFO, ca_certificate_path_.c_str());
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, true);
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, true);
+        curl_easy_setopt(curl_handle, CURLOPT_CAINFO, ca_certificate_path_.c_str());
     }
     else
     {
         // 如果没有服务端的CA证书，则跳过SSL验证
         std::cout << "Warning: CA certificate file not found, skipping SSL verification" << std::endl;
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, false);
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, false);
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, false);
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, false);
     }
 
     if (!url_.empty()) 
     {
-        curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER,      headers_);
-        curl_easy_setopt(curl_handle_, CURLOPT_URL,             url_.c_str());
-        curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION,   cb);
-        curl_easy_setopt(curl_handle_, CURLOPT_TIMEOUT,         1);
+        curl_easy_setopt(curl_handle, CURLOPT_URL,             url_.c_str());
     } 
     else 
     {
@@ -85,28 +73,76 @@ bool HttpsClient::Init()
     return true;
 }
 
-std::future<bool> HttpsClient::GetSendResult()
+bool HttpsClient::AddRequest(const std::string& postData)
 {
-    return send_result_.get_future();
-}
-
-void HttpsClient::SendData(const std::string& data)
-{
-    std::cout << "Sending data to " << url_ <<" begin!" <<std::endl;
-    curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
-
-    CURLcode res = curl_easy_perform(curl_handle_);
-    if(res != CURLE_OK)
+    CURL* handle = curl_easy_init();
+    if (!handle) 
     {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                curl_easy_strerror(res));
-         send_result_.set_value(false);
+        std::cout << "Failed to initialize CURL handle." << std::endl;
+        return false;
     }
-    std::cout << "Sending data to " << url_ <<" end!" << std::endl;
-     send_result_.set_value(true);
+    if(!InitCURLHandle(handle))
+    {
+        std::cout << "InitCURLHandle error." << std::endl;
+        return false;
+    }
+
+    curl_easy_setopt(handle, CURLOPT_HTTPHEADER,      headers_);
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,   WriteCallback);
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS,      postData.c_str());
+
+    curlHandles_.push_back(handle);
+    curl_multi_add_handle(multiHandle_, handle);
+
+    return true;
 }
 
-void HttpsClient::StartSendData(const std::string& data)
+void HttpsClient::PerformRequests()
 {
-    workerThread_= std::thread(&HttpsClient::SendData, this, data);
+    int stillRunning = 0;
+    CURLMcode multiRes = curl_multi_perform(multiHandle_, &stillRunning);
+
+    if (multiRes != CURLM_OK) 
+    {
+        std::cerr << "curl_multi_perform() failed, code " << multiRes << "." << std::endl;
+        return;
+    }
+
+    while (stillRunning) 
+    {
+        int numfds;
+        CURLMcode mc = curl_multi_wait(multiHandle_, nullptr, 0, 1000, &numfds);
+        if (mc != CURLM_OK) 
+        {
+            std::cerr << "curl_multi_wait() failed, code " << mc << "." << std::endl;
+            break;
+        }
+
+        curl_multi_perform(multiHandle_, &stillRunning);
+    }
+
+    for (size_t i = 0; i < curlHandles_.size(); ++i) 
+    {
+        long responseCode = 0;
+        curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode);
+        std::cout << "Request " << i << " response code: " << responseCode << std::endl;
+        if (responseCode >= 200 && responseCode < 300) 
+        {
+            std::cout <<"curlHandles_[" << i <<"]:" <<"Request succeeded." << std::endl;
+            break;
+        }
+        else
+        {
+            std::cout << "curlHandles_[" << i <<"]:"<<"Request failed with HTTP status code: " << responseCode << std::endl;
+        }
+
+        curl_multi_remove_handle(multiHandle_, curlHandles_[i]);
+        curl_easy_cleanup(curlHandles_[i]);
+    }
+    curlHandles_.clear();
+}
+
+void HttpsClient::StartPerformRequests()
+{
+    workerThread_ = std::thread(&HttpsClient::PerformRequests, this);
 }
