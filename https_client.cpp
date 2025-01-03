@@ -12,6 +12,10 @@ HttpsClient::~HttpsClient()
     {
 	    curl_easy_cleanup(curl_handle_);
     }
+    if(workerThread_.joinable())
+    {
+        workerThread_.join();
+    }
     curl_global_cleanup();
 }
 
@@ -81,7 +85,12 @@ bool HttpsClient::Init()
     return true;
 }
 
-bool HttpsClient::SendData(const char* data)
+std::future<bool> HttpsClient::GetSendResult()
+{
+    return send_result_.get_future();
+}
+
+void HttpsClient::SendData(const std::string& data)
 {
     std::cout << "Sending data to " << url_ <<" begin!" <<std::endl;
     curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
@@ -91,19 +100,13 @@ bool HttpsClient::SendData(const char* data)
     {
         fprintf(stderr, "curl_easy_perform() failed: %s\n",
                 curl_easy_strerror(res));
-        return false;
+         send_result_.set_value(false);
     }
     std::cout << "Sending data to " << url_ <<" end!" << std::endl;
-    return true;
+     send_result_.set_value(true);
 }
 
-bool HttpsClient::GetApi()
+void HttpsClient::StartSendData(const std::string& data)
 {
-    CURLcode res = curl_easy_perform(curl_handle_);
-    if(res)
-    {
-        std::cout << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-        return false;
-    }
-    return true;
+    workerThread_= std::thread(&HttpsClient::SendData, this, data);
 }

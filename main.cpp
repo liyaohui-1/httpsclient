@@ -10,7 +10,7 @@ static constexpr const uint8_t MAX_SEND_TIMES = 3;
 
 int main()
 {
-    HttpsClient client = HttpsClient{"./ca_tmp.pem"};  //需要设定实际的CA证书
+    HttpsClient client {"./ca_tmp.pem"};  //需要设定实际的CA证书
 
     HttpHeader header;
     header.vin = "LNAAAAAAAP5012345";
@@ -81,7 +81,8 @@ int main()
 
     for(uint32_t send_times = 1; send_times <= MAX_SEND_TIMES; send_times++)
     {
-        if (client.SendData(base64.c_str())) 
+        client.StartSendData(base64);
+        if(client.GetSendResult().get())
         {
             std::cout << "Send data Successed!" << std::endl;
             break;
@@ -110,19 +111,6 @@ int main()
             ofs.close();
         }
     }
-
-/*
-    if(client.GetApi())
-    {
-        std::cout << "GetApi Successed!" << std::endl;
-    }
-    else
-    {
-        std::cout << "Failed to GetApi!" << std::endl;
-    }
-
-    compress_zipdir("test/","./test.zip",nullptr);
-*/
 
     return 0;
 }

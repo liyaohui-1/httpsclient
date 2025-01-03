@@ -2,10 +2,10 @@
 #define HTTPS_CLIENT_H_
 
 #include <string>
-#include <memory>
-#include <mutex>
 #include <iostream>
 #include <unistd.h>
+#include <thread>
+#include <future>
 #include "curl/curl.h"
 
 typedef struct HttpHeader{
@@ -21,8 +21,6 @@ class HttpsClient
     using WriteCallback = size_t (*)(void*, size_t, size_t, void*);
 public:
     HttpsClient(const std::string& ca_certificate_path);
-    HttpsClient(const HttpsClient&) = default;
-    HttpsClient& operator=(const HttpsClient&) = default;
     ~HttpsClient();
 
     void RegisterCallback(const WriteCallback& cb);
@@ -33,15 +31,20 @@ public:
     void SetUrl(const std::string& url);
     void SetHeader(const HttpHeader& header);
 
-    bool SendData(const char* data);
-    bool GetApi();
+    void StartSendData(const std::string& data);
+    std::future<bool> GetSendResult();
 
 private:
-    CURL *curl_handle_;
+    void SendData(const std::string& data);
+
     curl_slist* headers_ {nullptr};
     std::string ca_certificate_path_;
     std::string url_;
+
+    CURL *curl_handle_;
     WriteCallback cb;
+    std::thread workerThread_;
+    std::promise<bool> send_result_;
 };
 
 #endif // HTTPS_CLIENT_H_
