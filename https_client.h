@@ -50,8 +50,7 @@ public:
 private:
     bool InitCURLHandle(CURL* curl_handle);
     void PerformRequests();
-    void UploadChunkThread(const std::string& url, int uploadSize, int start, int end, int threadID, std::ifstream& file);
-    uint32_t GetUploadSize(const std::string& url);
+    void UploadChunkThread(const std::string& url, int start, int end, int threadID, const std::string& file_path);
 
     static size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) 
     {
