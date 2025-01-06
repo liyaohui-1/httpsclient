@@ -132,21 +132,18 @@ void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
 void HttpsClient::PerformRequests()
 {
     int stillRunning = 0;
-    CURLMcode multiRes = curl_multi_perform(multiHandle_, &stillRunning);
-
-    if (multiRes != CURLM_OK) 
+    if(curl_multi_perform(multiHandle_, &stillRunning) != CURLM_OK)
     {
-        std::cerr << "curl_multi_perform() failed, code " << multiRes << "." << std::endl;
+        std::cout << "curl_multi_perform() failed !"<< std::endl;
         return;
     }
 
     while (stillRunning) 
     {
         int numfds;
-        CURLMcode mc = curl_multi_wait(multiHandle_, nullptr, 0, 1000, &numfds);
-        if (mc != CURLM_OK) 
+        if(curl_multi_wait(multiHandle_, nullptr, 0, 1000, &numfds) != CURLM_OK)
         {
-            std::cerr << "curl_multi_wait() failed, code " << mc << "." << std::endl;
+            std::cout << "curl_multi_wait() failed!" << std::endl;
             break;
         }
 
@@ -156,10 +153,9 @@ void HttpsClient::PerformRequests()
     for (size_t i = 0; i < curlHandles_.size(); ++i) 
     {
         long responseCode = 0;
-        CURLcode res = curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode);
-        if(res != CURLE_OK)
+        if(curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode) != CURLE_OK)
         {
-            std::cerr << "curl_easy_getinfo() "<< "[" << i << "]" <<" failed, code " << res << "." << std::endl;
+            std::cout << "curl_easy_getinfo() "<< "[" << i << "]" <<" failed!" << std::endl;
             continue;
         }
 
