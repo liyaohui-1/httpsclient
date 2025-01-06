@@ -52,7 +52,7 @@ private:
     void PerformRequests();
     void UploadChunkThread(const std::string& url, int uploadSize, int start, int end, int threadID, std::ifstream& file);
     uint32_t GetUploadSize(const std::string& url);
-    
+
     static size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) 
     {
         return size * nmemb;
@@ -67,6 +67,7 @@ private:
     std::string url_;
     
     std::thread workerThread_;
+    std::vector<std::thread> threads;
 };
 
 #endif // HTTPS_CLIENT_H_

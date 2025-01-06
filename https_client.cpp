@@ -18,6 +18,14 @@ HttpsClient::~HttpsClient()
         workerThread_.join();
     }
 
+    for (auto& t : threads)
+    {
+        if(t.joinable())
+        {
+            t.join(); 
+        }
+    }
+
     for (auto& handle : curlHandles_) 
     {
         if (handle) 
@@ -266,7 +274,6 @@ void HttpsClient::OnFileSizeOver50MB(std::string& file_path)
     uint32_t fileSize = get_file_size(file_path + "zip"); // 获取文件总大小
     uint32_t upLoadSize = GetUploadSize(url_);
 
-    std::vector<std::thread> threads; // 存储线程对象的容器
     int chunkNum = (fileSize - upLoadSize + CHUNK_SIZE - 1) / CHUNK_SIZE; // 计算需要分块的数量
 
 	// 创建多个线程，每个线程负责上传一个数据块，线程的创建数量与分块的数量一致
@@ -277,12 +284,4 @@ void HttpsClient::OnFileSizeOver50MB(std::string& file_path)
 		std::thread t(UploadChunkThread, url_, upLoadSize, start, end, i, std::ifstream(file_path + "zip", std::ios::binary));
 		threads.push_back(std::move(t));
 	}
-
-    for (auto& t : threads)
-    {
-        if(t.joinable())
-        {
-            t.join(); 
-        }
-    }
 }
