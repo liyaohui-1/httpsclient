@@ -10,6 +10,8 @@
 #include "compress.h"
 #include "curl/curl.h"
 
+#define CHUNK_SIZE 1024*1024*50 // 50MB
+
 typedef struct HttpHeader{
     std::string vin;             // 车辆vin码
     uint8_t domain {0};          // 业务域id
@@ -43,11 +45,14 @@ public:
     bool AddRequest(FileFormat& fileFormat);
     void StartPerformRequests();
     void SaveReissueData(const FileFormat& fileFormat);
+    void OnFileSizeOver50MB(std::string& file_path);
 
 private:
     bool InitCURLHandle(CURL* curl_handle);
     void PerformRequests();
-
+    void UploadChunkThread(const std::string& url, int uploadSize, int start, int end, int threadID, std::ifstream& file);
+    uint32_t GetUploadSize(const std::string& url);
+    
     static size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) 
     {
         return size * nmemb;

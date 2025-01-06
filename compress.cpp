@@ -220,3 +220,12 @@ std::string base64_encode(const std::string &input)
 
     return encoded;  
 }
+
+uint32_t get_file_size(const std::string& filename)
+{
+    std::ifstream file(filename, std::ios::binary);
+    file.seekg(0, std::ios::end);
+    size_t size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    return size;
+}

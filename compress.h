@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <fstream>
 #include "zlib.h"
 #include "zip.h"
 
@@ -32,5 +33,8 @@ bool compress_zipdir(const std::string& sourcePath, const std::string& zipPath, 
 
 // base64编码接口
 std::string base64_encode(const std::string &input);
+
+// 获取文件总大小
+uint32_t get_file_size(const std::string& file_path);
 
 #endif

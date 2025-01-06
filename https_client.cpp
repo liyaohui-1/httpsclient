@@ -27,6 +27,7 @@ HttpsClient::~HttpsClient()
         }
     }
     curl_multi_cleanup(multiHandle_);
+    curl_slist_free_all(headers_);
     curl_global_cleanup();
 }
 
@@ -185,4 +186,107 @@ void HttpsClient::PerformRequests()
 void HttpsClient::StartPerformRequests()
 {
     workerThread_ = std::thread(&HttpsClient::PerformRequests, this);
+}
+
+// 获取已上传的文件大小（通过HTTP HEAD请求获取服务器上对应资源的Content-Length）
+uint32_t HttpsClient::GetUploadSize(const std::string& url)
+{
+    CURL *curl = curl_easy_init();
+    if (curl)
+    {
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+        
+        CURLcode res = curl_easy_perform(curl);
+        if (res == CURLE_OK)
+        {
+            double contentLength;
+            curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &contentLength); 
+            curl_easy_cleanup(curl);
+            return (uint32_t)contentLength;
+        }
+        
+        curl_easy_cleanup(curl);
+    }
+    return 0;
+}
+
+// 每个线程执行的函数体，用于上传指定范围的数据块
+void HttpsClient::UploadChunkThread(const std::string& url, int uploadedSize, int start, int end, int threadID, std::ifstream& file)
+{
+    curl_off_t rangeStart = start;
+    curl_off_t rangeEnd = end;
+    
+    std::stringstream headerRange;
+    headerRange << "Range: bytes=" << rangeStart << "-" << rangeEnd;
+    
+    CURL *curl = curl_easy_init();
+    if (curl)
+    {
+        file.seekg(start);
+        
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L); // 设置为上传请求
+        curl_easy_setopt(curl, CURLOPT_READDATA, &file);
+        curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, CHUNK_SIZE);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr); // 不需要返回body内容
+        
+        headers_ = curl_slist_append(headers_, headerRange.str().c_str());
+        
+        // 添加断点续传的相关选项
+        if (threadID > 0)
+        {
+            curl_easy_setopt(curl, CURLOPT_RESUME_FROM_LARGE, uploadedSize + start);
+        }
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_);
+    
+		// 执行上传请求
+		if(curl_easy_perform(curl) == CURLE_OK)
+        {
+			std::cout << "Thread " << threadID << " upload success!" << std::endl;
+        }
+		else
+        {
+			std::cout << "Thread " << threadID << " upload failed! "  << std::endl;
+        }
+
+        curl_easy_cleanup(curl);
+    }
+}
+
+void HttpsClient::OnFileSizeOver50MB(std::string& file_path)
+{
+    // 单个文件大小超过50MB时，需要分包发送
+    if(compress_zipdir(file_path, file_path + ".zip", nullptr))
+    {
+        std::cout << "compress_zipdir success." << std::endl;
+    }
+    else
+    {
+        std::cout << "compress_zipdir failed." << std::endl;
+        return;
+    }
+
+    uint32_t fileSize = get_file_size(file_path + "zip"); // 获取文件总大小
+    uint32_t upLoadSize = GetUploadSize(url_);
+
+    std::vector<std::thread> threads; // 存储线程对象的容器
+    int chunkNum = (fileSize - upLoadSize + CHUNK_SIZE - 1) / CHUNK_SIZE; // 计算需要分块的数量
+
+	// 创建多个线程，每个线程负责上传一个数据块，线程的创建数量与分块的数量一致
+	for (int i = 0; i < chunkNum; ++i)
+	{
+		int start = i * CHUNK_SIZE;
+		int end = (i == chunkNum - 1) ? fileSize : start + CHUNK_SIZE - 1;
+		std::thread t(UploadChunkThread, url_, upLoadSize, start, end, i, std::ifstream(file_path + "zip", std::ios::binary));
+		threads.push_back(std::move(t));
+	}
+
+    for (auto& t : threads)
+    {
+        if(t.joinable())
+        {
+            t.join(); 
+        }
+    }
 }
