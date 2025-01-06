@@ -9,6 +9,11 @@ HttpsClient::HttpsClient(const std::string& ca_certificate_path)
 
 HttpsClient::~HttpsClient()
 {
+    if(workerThread_.joinable())
+    {
+        workerThread_.join();
+    }
+
     for (auto& handle : curlHandles_) 
     {
         if (handle) 
@@ -19,11 +24,6 @@ HttpsClient::~HttpsClient()
     }
     curl_multi_cleanup(multiHandle_);
     curl_global_cleanup();
-
-    if(workerThread_.joinable())
-    {
-        workerThread_.join();
-    }
 }
 
 void HttpsClient::SetUrl(const std::string& url)
