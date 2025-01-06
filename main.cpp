@@ -6,8 +6,6 @@
 
 using json = nlohmann::json;
 
-static constexpr const uint8_t MAX_SEND_TIMES = 3;
-
 int main()
 {
     HttpsClient client {"ca_certificate_path"};
