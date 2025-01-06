@@ -200,6 +200,7 @@ uint32_t HttpsClient::GetUploadSize(const std::string& url)
     {
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 50L); // 设置50毫秒（5秒）连接超时
         
         CURLcode res = curl_easy_perform(curl);
         if (res == CURLE_OK)
