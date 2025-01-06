@@ -1,4 +1,8 @@
 #include "https_client.h"
+#include "nlohmann/json.hpp"
+#include <fstream>
+
+using json = nlohmann::json;
 
 HttpsClient::HttpsClient(const std::string& ca_certificate_path)
         : ca_certificate_path_(ca_certificate_path) 
@@ -73,7 +77,7 @@ bool HttpsClient::InitCURLHandle(CURL* curl_handle)
     return true;
 }
 
-bool HttpsClient::AddRequest(const std::string& postData)
+bool HttpsClient::AddRequest(FileFormat& fileFormat)
 {
     CURL* handle = curl_easy_init();
     if (!handle) 
@@ -89,12 +93,39 @@ bool HttpsClient::AddRequest(const std::string& postData)
 
     curl_easy_setopt(handle, CURLOPT_HTTPHEADER,      headers_);
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,   WriteCallback);
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDS,      postData.c_str());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS,      fileFormat.data.c_str());
 
     curlHandles_.push_back(handle);
     curl_multi_add_handle(multiHandle_, handle);
 
+    if(postData_.find(handle) == postData_.end())
+    {
+        postData_.emplace(handle, fileFormat);
+    }
+
     return true;
+}
+
+void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
+{
+    json j_resend;
+    std::cout << "Failed to send data, save to resend file." << std::endl;
+    // 保存为补发文件格式：域名_域内节点名_业务类型_功能模块_ID_功能触发ID_时间_分包符_结束包符_0
+    std::string resend_file_name = fileFormat.domain_name + "_" + fileFormat.node_name + "_" + fileFormat.business_type + "_" +  \
+                                   fileFormat.function_module_id + "_" + fileFormat.function_trigger_id + "_" +  \
+                                   std::to_string(fileFormat.trigger_timestamp) + "_" + fileFormat.package_separator + "_" +  \
+                                   fileFormat.end_separator + "_0";
+    j_resend["array"].push_back(fileFormat.data.c_str());
+    std::cout << "resend data: " << j_resend.dump(4) << std::endl;
+
+    std::ofstream ofs(resend_file_name, std::ios::app | std::ios::binary);
+    if(!ofs.is_open())
+    {
+        std::cout << "Failed to open file: " << resend_file_name << std::endl;
+        return;
+    }
+    ofs << j_resend.dump(4);
+    ofs.close();
 }
 
 void HttpsClient::PerformRequests()
@@ -124,7 +155,13 @@ void HttpsClient::PerformRequests()
     for (size_t i = 0; i < curlHandles_.size(); ++i) 
     {
         long responseCode = 0;
-        curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode);
+        CURLcode res = curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode);
+        if(res != CURLE_OK)
+        {
+            std::cerr << "curl_easy_getinfo() "<< "[" << i << "]" <<" failed, code " << res << "." << std::endl;
+            continue;
+        }
+
         std::cout << "Request " << i << " response code: " << responseCode << std::endl;
         if (responseCode >= 200 && responseCode < 300) 
         {
@@ -133,12 +170,15 @@ void HttpsClient::PerformRequests()
         }
         else
         {
+            SaveReissueData(postData_[curlHandles_[i]]);
             std::cout << "curlHandles_[" << i <<"]:"<<"Request failed with HTTP status code: " << responseCode << std::endl;
         }
 
         curl_multi_remove_handle(multiHandle_, curlHandles_[i]);
         curl_easy_cleanup(curlHandles_[i]);
     }
+
+    postData_.clear();
     curlHandles_.clear();
 }
 

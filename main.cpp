@@ -46,8 +46,6 @@ int main()
 
     std::string data = j.dump();
     std::string destChar;
-    static json j_resend;
-
     if(!compress_string(data, destChar))
     {
         std::cout << "compress string error occur." << std::endl;
@@ -60,59 +58,22 @@ int main()
 
     std::string base64 = base64_encode(destChar);
     std::cout << "base64: " << base64 << std::endl;
-
-    client.AddRequest(base64.c_str());
+    
+    FileFormat tmp;
+    tmp.domain_name = "example.com";
+    tmp.node_name = "node123";
+    tmp.business_type = "serviceA";
+    tmp.function_module_id = "module001";
+    tmp.function_trigger_id = "trigger005";
+    tmp.trigger_timestamp = 1647253105799;
+    tmp.package_separator = "001";
+    tmp.end_separator = "010";
+    tmp.data = base64;
+    client.AddRequest(tmp);
 
     client.StartPerformRequests();
 
     std::cout << "Waiting for requests to complete..." << std::endl;
-
-    /*
-    for(uint32_t send_times = 1; send_times <= MAX_SEND_TIMES; send_times++)
-    {
-        if (client.SendData(base64.c_str())) 
-        {
-            std::cout << "Send data Successed!" << std::endl;
-            break;
-        }
-        else
-        {
-            std::cout << "Failed to PerformRequests send data times: " << send_times << std::endl;
-        }
-
-        if(send_times == MAX_SEND_TIMES)
-        {
-            // 重发多次失败之后保存为补发文件(暂定为重发MAX_SEND_TIMES次之后)
-            std::cout << "Failed to send data, save to resend file." << std::endl;
-            // 保存为补发文件格式：域名_域内节点名_业务类型_功能模块 ID_功能触发ID_时间_分包符_结束包符_0
-            std::string resend_file_name = "example.com_node123_serviceA_module001_trigger005_20231005143000_001_010_0";
-            j_resend["array"].push_back(base64);
-            std::cout << "resend data: " << j_resend.dump(4) << std::endl;
-
-            std::ofstream ofs(resend_file_name, std::ios::app | std::ios::binary);
-            if(!ofs.is_open())
-            {
-                std::cout << "Failed to open file: " << resend_file_name << std::endl;
-                return 0;
-            }
-            ofs << j_resend.dump(4);
-            ofs.close();
-        }
-    }
-    */
-
-/*
-    if(client.GetApi())
-    {
-        std::cout << "GetApi Successed!" << std::endl;
-    }
-    else
-    {
-        std::cout << "Failed to GetApi!" << std::endl;
-    }
-
-    compress_zipdir("test/","./test.zip",nullptr);
-*/
 
     return 0;
 }

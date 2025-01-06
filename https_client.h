@@ -6,7 +6,8 @@
 #include <unistd.h>
 #include <vector>
 #include <thread>
-#include <atomic>
+#include <unordered_map>
+#include "compress.h"
 #include "curl/curl.h"
 
 typedef struct HttpHeader{
@@ -16,6 +17,18 @@ typedef struct HttpHeader{
     std::string version;         // 采集配置文件的版本号
     std::string standardVersion; // 使用的埋点数据采集规范版本
 }HttpHeader;
+
+typedef struct FileFormat{
+    std::string domain_name;         // 域名
+    std::string node_name;           // 域内节点名
+    std::string business_type;       // 业务类型
+    std::string function_module_id;  // 功能模块ID
+    std::string function_trigger_id; // 功能触发ID
+    uint64_t    trigger_timestamp;   // 触发时间戳
+    std::string package_separator;   // 分包符
+    std::string end_separator;       // 结束符
+    std::string data;                // 数据
+}FileFormat;
 
 class HttpsClient
 {
@@ -27,8 +40,9 @@ public:
     void SetUrl(const std::string& url);
     void SetHeader(const HttpHeader& header);
 
-    bool AddRequest(const std::string& postData);
+    bool AddRequest(FileFormat& fileFormat);
     void StartPerformRequests();
+    void SaveReissueData(const FileFormat& fileFormat);
 
 private:
     bool InitCURLHandle(CURL* curl_handle);
@@ -40,7 +54,8 @@ private:
     }
 
     std::vector<CURL*> curlHandles_;
-    std::atomic<CURLM*> multiHandle_;
+    CURLM* multiHandle_;
+    std::unordered_map<CURL* ,FileFormat> postData_;
 
     curl_slist* headers_ {nullptr};
     std::string ca_certificate_path_;
