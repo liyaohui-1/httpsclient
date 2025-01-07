@@ -11,6 +11,7 @@
 #include "curl/curl.h"
 
 #define CHUNK_SIZE 1024*1024*50 // 50MB
+#define MAX_SEND_FAIL_TIMES 3 // 最大发送失败次数
 
 typedef struct{
     std::string vin;             // 车辆vin码

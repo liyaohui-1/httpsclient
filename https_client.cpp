@@ -201,6 +201,7 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
     std::stringstream headerRange;
     headerRange << "Range: bytes=" << rangeStart << "-" << rangeEnd;
     std::fstream file(file_path, std::ios::in | std::ios::binary);
+    uint32_t sendfailtimes = 0; 
     
     CURL *curl = curl_easy_init();
     if (curl)
@@ -223,22 +224,37 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_);
     
 		// 执行上传请求
-		if(curl_easy_perform(curl) == CURLE_OK)
+        while(true)
         {
-			std::cout << "Thread " << threadID << " upload success!" << std::endl;
+            if(curl_easy_perform(curl) == CURLE_OK)
+            {
+                std::cout << "Thread " << threadID << " upload success!" << std::endl;
+                break;
+            }
+            else
+            {
+                if(++sendfailtimes < MAX_SEND_FAIL_TIMES)
+                {
+                    std::cout << "Thread " << threadID << " upload failed, [" << sendfailtimes << " ]times, retry..." << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
+                }
+                else
+                {
+                    std::cout << "Thread " << threadID << " upload failed, max retry times reached, exit..." << std::endl;
+                    break;
+                }
+            }
         }
-		else
-        {
-			std::cout << "Thread " << threadID << " upload failed! "  << std::endl;
-        }
-
         curl_easy_cleanup(curl);
     }
 }
 
+// 单个文件大小超过50MB时，需要分包发送
 void HttpsClient::OnFileSizeOver50MB(std::string& file_path)
 {
-    // 单个文件大小超过50MB时，需要分包发送
+    threads.clear();  //清空线程池
+
     if(compress_zipdir(file_path, file_path + ".zip", nullptr))
     {
         std::cout << "compress_zipdir success." << std::endl;
