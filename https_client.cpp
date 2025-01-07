@@ -193,13 +193,10 @@ void HttpsClient::StartPerformRequests()
 }
 
 // 每个线程执行的函数体，用于上传指定范围的数据块
+// TODO:如果需要分包上传，则需要修改此函数，在传输的内容结尾加入分包符号或结束符号
 void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, int threadID,const std::string& file_path)
 {
-    curl_off_t rangeStart = start;
-    curl_off_t rangeEnd = end;
-    
-    std::stringstream headerRange;
-    headerRange << "Range: bytes=" << rangeStart << "-" << rangeEnd;
+    std::cout << "Thread " << threadID << " start upload chunk from " << start << " to " << end << std::endl;
     std::fstream file(file_path, std::ios::in | std::ios::binary);
     uint32_t sendfailtimes = 0; 
     
@@ -209,19 +206,16 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
         file.seekg(start);
         
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L); // 设置为上传请求
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
         curl_easy_setopt(curl, CURLOPT_READDATA, &file);
         curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, CHUNK_SIZE);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr); // 不需要返回body内容
-        
-        headers_ = curl_slist_append(headers_, headerRange.str().c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
         
         // 添加断点续传的相关选项
         if (threadID > 0)
         {
             curl_easy_setopt(curl, CURLOPT_RESUME_FROM_LARGE, start);
         }
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_);
     
 		// 执行上传请求
         while(true)
