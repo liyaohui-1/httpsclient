@@ -12,7 +12,7 @@
 
 #define CHUNK_SIZE 1024*1024*50 // 50MB
 
-typedef struct HttpHeader{
+typedef struct{
     std::string vin;             // 车辆vin码
     uint8_t domain {0};          // 业务域id
     std::string compressType;    // 压缩算法
@@ -20,7 +20,7 @@ typedef struct HttpHeader{
     std::string standardVersion; // 使用的埋点数据采集规范版本
 }HttpHeader;
 
-typedef struct FileFormat{
+typedef struct{
     std::string domain_name;         // 域名
     std::string node_name;           // 域内节点名
     std::string business_type;       // 业务类型
