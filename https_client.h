@@ -46,7 +46,7 @@ public:
     bool AddRequest(FileFormat& fileFormat);
     void StartPerformRequests();
     void SaveReissueData(const FileFormat& fileFormat);
-    void OnFileSizeOver50MB(std::string& file_path);
+    void OnFileSizeOver(std::string& file_path);
 
 private:
     bool InitCURLHandle(CURL* curl_handle);

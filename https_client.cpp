@@ -245,8 +245,7 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
     }
 }
 
-// 单个文件大小超过50MB时，需要分包发送
-void HttpsClient::OnFileSizeOver50MB(std::string& file_path)
+void HttpsClient::OnFileSizeOver(std::string& file_path)
 {
     threads.clear();  //清空线程池
 
