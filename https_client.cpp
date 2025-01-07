@@ -233,17 +233,12 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
             }
             else
             {
-                if(++sendfailtimes < MAX_SEND_FAIL_TIMES)
-                {
-                    std::cout << "Thread " << threadID << " upload failed, [" << sendfailtimes << " ]times, retry..." << std::endl;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
-                }
-                else
+                if(++sendfailtimes > MAX_SEND_FAIL_TIMES)
                 {
                     std::cout << "Thread " << threadID << " upload failed, max retry times reached, exit..." << std::endl;
                     break;
                 }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10)); 
             }
         }
         curl_easy_cleanup(curl);
