@@ -5,7 +5,7 @@
 using json = nlohmann::json;
 
 HttpsClient::HttpsClient(const std::string& ca_certificate_path)
-        : ca_certificate_path_(ca_certificate_path) 
+        : ca_certificate_path_(ca_certificate_path), threadPool_(10)
 {
     curl_global_init(CURL_GLOBAL_ALL);
     multiHandle_ = curl_multi_init();
@@ -16,14 +16,6 @@ HttpsClient::~HttpsClient()
     if(workerThread_.joinable())
     {
         workerThread_.join();
-    }
-
-    for (auto& t : threads)
-    {
-        if(t.joinable())
-        {
-            t.join(); 
-        }
     }
 
     for (auto& handle : curlHandles_) 
@@ -259,7 +251,6 @@ void HttpsClient::OnFileSizeOver(const std::string& file_path)
 	{
 		int start = i * CHUNK_SIZE;
 		int end = (i == chunkNum - 1) ? fileSize : start + CHUNK_SIZE - 1;
-		std::thread t(&HttpsClient::UploadChunkThread, this, url_, start, end, i, file_path + ".zip");
-		threads.push_back(std::move(t));
+        threadPool_.Enqueue(&HttpsClient::UploadChunkThread, this, url_, start, end, i, file_path + ".zip");
 	}
 }

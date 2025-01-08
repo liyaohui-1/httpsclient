@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include "compress.h"
 #include "curl/curl.h"
+#include "thread_pool.h"
 
 #define CHUNK_SIZE 1024*1024*50 // 50MB
 #define MAX_SEND_FAIL_TIMES 3 // 最大发送失败次数
@@ -67,7 +68,7 @@ private:
     std::string url_;
     
     std::thread workerThread_;
-    std::vector<std::thread> threads;
+    ThreadPool threadPool_;
 };
 
 #endif // HTTPS_CLIENT_H_
