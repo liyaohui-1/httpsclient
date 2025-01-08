@@ -129,7 +129,7 @@ void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
         std::cout << "Failed to open file: " << resend_file_name << std::endl;
         return;
     }
-    ofs << j_resend.dump(4);
+    ofs << j_resend.dump(4) << std::endl;
     ofs.close();
 }
 
