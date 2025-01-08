@@ -241,8 +241,6 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
 
 void HttpsClient::OnFileSizeOver(std::string& file_path)
 {
-    threads.clear();  //清空线程池
-
     if(compress_zipdir(file_path, file_path + ".zip", nullptr))
     {
         std::cout << "compress_zipdir success." << std::endl;
