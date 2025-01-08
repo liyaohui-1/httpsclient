@@ -19,6 +19,7 @@ int main()
     client.SetUrl(std::string{"https://www.baidu.com"});  //测试用百度
     // client.SetUrl(std::string{"https://bc-v2c-eea2-servicedatasync.gacicv.com/"});
     client.SetHeader(header);
+    client.StartPerformRequests();
 
     json j; // 首先创建一个空的json对象
     j["timestamp"] = 1647253105799;
@@ -69,7 +70,9 @@ int main()
     tmp.data = base64;
     client.AddRequest(tmp);
 
-    client.StartPerformRequests();
+    FileFormat tmp2 = tmp;
+    tmp2.node_name = "node456";
+    client.AddRequest(tmp2);
 
     std::cout << "Waiting for requests to complete..." << std::endl;
 

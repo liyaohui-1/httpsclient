@@ -13,6 +13,7 @@ HttpsClient::HttpsClient(const std::string& ca_certificate_path)
 
 HttpsClient::~HttpsClient()
 {
+    stop_ = true;
     if(workerThread_.joinable())
     {
         workerThread_.join();
@@ -96,12 +97,15 @@ bool HttpsClient::AddRequest(const FileFormat& fileFormat)
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,   WriteCallback);
     curl_easy_setopt(handle, CURLOPT_POSTFIELDS,      fileFormat.data.c_str());
 
-    curlHandles_.push_back(handle);
-    curl_multi_add_handle(multiHandle_, handle);
-
-    if(postData_.find(handle) == postData_.end())
     {
-        postData_.emplace(handle, fileFormat);
+        std::lock_guard<std::mutex> lock(mutex_);
+        curlHandles_.push_back(handle);
+        curl_multi_add_handle(multiHandle_, handle);
+
+        if(postData_.find(handle) == postData_.end())
+        {
+            postData_.emplace(handle, fileFormat);
+        }
     }
 
     return true;
@@ -131,52 +135,56 @@ void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
 
 void HttpsClient::PerformRequests()
 {
-    int stillRunning = 0;
-    if(curl_multi_perform(multiHandle_, &stillRunning) != CURLM_OK)
+    while(!stop_)
     {
-        std::cout << "curl_multi_perform() failed !"<< std::endl;
-        return;
+        int stillRunning = 0;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(curl_multi_perform(multiHandle_, &stillRunning) != CURLM_OK)
+        {
+            std::cout << "curl_multi_perform() failed !"<< std::endl;
+            return;
+        }
+
+        while (stillRunning) 
+        {
+            int numfds;
+            if(curl_multi_wait(multiHandle_, nullptr, 0, 1000, &numfds) != CURLM_OK)
+            {
+                std::cout << "curl_multi_wait() failed!" << std::endl;
+                break;
+            }
+
+            curl_multi_perform(multiHandle_, &stillRunning);
+        }
+
+        for (size_t i = 0; i < curlHandles_.size(); ++i) 
+        {
+            long responseCode = 0;
+            if(curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode) != CURLE_OK)
+            {
+                std::cout << "curl_easy_getinfo() "<< "[" << i << "]" <<" failed!" << std::endl;
+                continue;
+            }
+
+            std::cout << "Request " << i << " response code: " << responseCode << std::endl;
+            if (responseCode >= 200 && responseCode < 300) 
+            {
+                std::cout <<"curlHandles_[" << i <<"]:" <<"Request succeeded." << std::endl;
+                break;
+            }
+            else
+            {
+                SaveReissueData(postData_[curlHandles_[i]]);
+                std::cout << "curlHandles_[" << i <<"]:"<<"Request failed with HTTP status code: " << responseCode << std::endl;
+            }
+
+            curl_multi_remove_handle(multiHandle_, curlHandles_[i]);
+            curl_easy_cleanup(curlHandles_[i]);
+        }
+
+        postData_.clear();
+        curlHandles_.clear();
     }
-
-    while (stillRunning) 
-    {
-        int numfds;
-        if(curl_multi_wait(multiHandle_, nullptr, 0, 1000, &numfds) != CURLM_OK)
-        {
-            std::cout << "curl_multi_wait() failed!" << std::endl;
-            break;
-        }
-
-        curl_multi_perform(multiHandle_, &stillRunning);
-    }
-
-    for (size_t i = 0; i < curlHandles_.size(); ++i) 
-    {
-        long responseCode = 0;
-        if(curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode) != CURLE_OK)
-        {
-            std::cout << "curl_easy_getinfo() "<< "[" << i << "]" <<" failed!" << std::endl;
-            continue;
-        }
-
-        std::cout << "Request " << i << " response code: " << responseCode << std::endl;
-        if (responseCode >= 200 && responseCode < 300) 
-        {
-            std::cout <<"curlHandles_[" << i <<"]:" <<"Request succeeded." << std::endl;
-            break;
-        }
-        else
-        {
-            SaveReissueData(postData_[curlHandles_[i]]);
-            std::cout << "curlHandles_[" << i <<"]:"<<"Request failed with HTTP status code: " << responseCode << std::endl;
-        }
-
-        curl_multi_remove_handle(multiHandle_, curlHandles_[i]);
-        curl_easy_cleanup(curlHandles_[i]);
-    }
-
-    postData_.clear();
-    curlHandles_.clear();
 }
 
 void HttpsClient::StartPerformRequests()

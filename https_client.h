@@ -7,6 +7,7 @@
 #include <vector>
 #include <thread>
 #include <unordered_map>
+#include <mutex>
 #include "compress.h"
 #include "curl/curl.h"
 #include "thread_pool.h"
@@ -69,6 +70,9 @@ private:
     
     std::thread workerThread_;
     ThreadPool threadPool_;
+
+    std::mutex mutex_;
+    std::atomic_bool stop_ {false};
 };
 
 #endif // HTTPS_CLIENT_H_
