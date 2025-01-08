@@ -43,10 +43,10 @@ public:
     void SetUrl(const std::string& url);
     void SetHeader(const HttpHeader& header);
 
-    bool AddRequest(FileFormat& fileFormat);
+    bool AddRequest(const FileFormat& fileFormat);
     void StartPerformRequests();
     void SaveReissueData(const FileFormat& fileFormat);
-    void OnFileSizeOver(std::string& file_path);
+    void OnFileSizeOver(const std::string& file_path);
 
 private:
     bool InitCURLHandle(CURL* curl_handle);

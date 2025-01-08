@@ -86,7 +86,7 @@ bool HttpsClient::InitCURLHandle(CURL* curl_handle)
     return true;
 }
 
-bool HttpsClient::AddRequest(FileFormat& fileFormat)
+bool HttpsClient::AddRequest(const FileFormat& fileFormat)
 {
     CURL* handle = curl_easy_init();
     if (!handle) 
@@ -239,7 +239,7 @@ void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, 
     }
 }
 
-void HttpsClient::OnFileSizeOver(std::string& file_path)
+void HttpsClient::OnFileSizeOver(const std::string& file_path)
 {
     if(compress_zipdir(file_path, file_path + ".zip", nullptr))
     {
