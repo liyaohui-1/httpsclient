@@ -254,7 +254,7 @@ void HttpsClient::OnFileSizeOver(const std::string& file_path)
     uint32_t fileSize = get_file_size(file_path + ".zip"); // 获取文件总大小
     int chunkNum = (fileSize  + CHUNK_SIZE - 1) / CHUNK_SIZE; // 计算需要分块的数量
 
-	// 创建多个线程，每个线程负责上传一个数据块，线程的创建数量与分块的数量一致
+	// 这里使用线程池，每个线程负责上传一个数据块，线程的创建数量与分块的数量一致
 	for (int i = 0; i < chunkNum; ++i)
 	{
 		int start = i * CHUNK_SIZE;
