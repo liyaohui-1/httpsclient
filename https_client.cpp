@@ -135,7 +135,7 @@ void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
 
 void HttpsClient::PerformRequests()
 {
-    while(!stop_)
+    while(true)
     {
         int stillRunning = 0;
         std::lock_guard<std::mutex> lock(mutex_);
@@ -184,6 +184,11 @@ void HttpsClient::PerformRequests()
 
         postData_.clear();
         curlHandles_.clear();
+
+        if(stop_)
+        {
+            break;
+        }
     }
 }
 
