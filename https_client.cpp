@@ -13,6 +13,7 @@ HttpsClient::HttpsClient(const std::string& ca_certificate_path)
 
 HttpsClient::~HttpsClient()
 {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     stop_ = true;
     if(workerThread_.joinable())
     {
@@ -116,7 +117,7 @@ void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
     json j_resend;
     std::cout << "Failed to send data, save to resend file." << std::endl;
     // 保存为补发文件格式：域名_域内节点名_业务类型_功能模块_ID_功能触发ID_时间_分包符_结束包符_0
-    std::string resend_file_name = fileFormat.domain_name + "_" + fileFormat.node_name + "_" + fileFormat.business_type + "_" +  \
+    std::string resend_file_name = fileFormat.domain_name + "/" + fileFormat.domain_name + "_" + fileFormat.node_name + "_" + fileFormat.business_type + "_" +  \
                                    fileFormat.function_module_id + "_" + fileFormat.function_trigger_id + "_" +  \
                                    std::to_string(fileFormat.trigger_timestamp) + "_" + fileFormat.package_separator + "_" +  \
                                    fileFormat.end_separator + "_0";
@@ -199,40 +200,41 @@ void HttpsClient::StartPerformRequests()
 
 // 每个线程执行的函数体，用于上传指定范围的数据块
 // TODO:如果需要分包上传，则需要修改此函数，在传输的内容结尾加入分包符号或结束符号
-void HttpsClient::UploadChunkThread(const std::string& url, int start, int end, int threadID,const std::string& file_path)
+void HttpsClient::UploadChunkThread(int start, int end, int threadID,const std::string& file_path)
 {
     std::cout << "Thread " << threadID << " start upload chunk from " << start << " to " << end << std::endl;
     std::fstream file(file_path, std::ios::in | std::ios::binary);
-    uint32_t sendfailtimes = 0; 
+    uint32_t sendfailtimes = 0;
+
+    std::string readData;
+    readData.resize(end - start);
+    file.read(&readData[0], end - start);
+
+    std::cout<<"readData size: " << readData.size() << std::endl;
     
     CURL *curl = curl_easy_init();
     if (curl)
-    {
-        file.seekg(start);
-        
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
-        curl_easy_setopt(curl, CURLOPT_READDATA, &file);
-        curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, CHUNK_SIZE);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
-        
-        // 添加断点续传的相关选项
-        if (threadID > 0)
-        {
-            curl_easy_setopt(curl, CURLOPT_RESUME_FROM_LARGE, start);
-        }
+    {   
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_easy_setopt(curl, CURLOPT_URL,            url_.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,  WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER,     headers_);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS,     readData.c_str());
     
 		// 执行上传请求
         while(true)
         {
-            if(curl_easy_perform(curl) == CURLE_OK)
+            int res = curl_easy_perform(curl);
+            if(res == CURLE_OK)
             {
                 std::cout << "Thread " << threadID << " upload success!" << std::endl;
                 break;
             }
             else
             {
-                if(++sendfailtimes > MAX_SEND_FAIL_TIMES)
+                std::cout << "Thread " << threadID << " upload failed, error code: " << res << std::endl;
+                if(++sendfailtimes >= MAX_SEND_FAIL_TIMES)
                 {
                     std::cout << "Thread " << threadID << " upload failed, max retry times reached, exit..." << std::endl;
                     break;
@@ -257,13 +259,15 @@ void HttpsClient::OnFileSizeOver(const std::string& file_path)
     }
 
     uint32_t fileSize = get_file_size(file_path + ".zip"); // 获取文件总大小
-    int chunkNum = (fileSize  + CHUNK_SIZE - 1) / CHUNK_SIZE; // 计算需要分块的数量
+    uint32_t chunkNum = (fileSize  + CHUNK_SIZE - 1) / CHUNK_SIZE; // 计算需要分块的数量
+
+    std::cout << "fileSize: " << fileSize << " chunkNum: " << chunkNum << std::endl;
 
 	// 这里使用线程池，每个线程负责上传一个数据块，线程的创建数量与分块的数量一致
 	for (int i = 0; i < chunkNum; ++i)
 	{
 		int start = i * CHUNK_SIZE;
 		int end = (i == chunkNum - 1) ? fileSize : start + CHUNK_SIZE - 1;
-        threadPool_.Enqueue(&HttpsClient::UploadChunkThread, this, url_, start, end, i, file_path + ".zip");
+        threadPool_.Enqueue(&HttpsClient::UploadChunkThread, this, start, end, i, file_path + ".zip");
 	}
 }

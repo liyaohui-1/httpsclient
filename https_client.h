@@ -12,7 +12,7 @@
 #include "curl/curl.h"
 #include "thread_pool.h"
 
-#define CHUNK_SIZE 1024*1024*50 // 50MB
+#define CHUNK_SIZE (1024*1024*50) // 50MB
 #define MAX_SEND_FAIL_TIMES 3 // 最大发送失败次数
 
 typedef struct{
@@ -53,7 +53,7 @@ public:
 private:
     bool InitCURLHandle(CURL* curl_handle);
     void PerformRequests();
-    void UploadChunkThread(const std::string& url, int start, int end, int threadID, const std::string& file_path);
+    void UploadChunkThread(int start, int end, int threadID, const std::string& file_path);
 
     static size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) 
     {

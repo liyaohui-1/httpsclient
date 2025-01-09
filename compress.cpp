@@ -153,7 +153,7 @@ int compress_addDir(const std::string& sourcePath, zipFile& zf, const char* pw) 
     }
  
     closedir(dir);
-    return 0;
+    return 1;
 }
 
 bool compress_zipdir(const std::string& sourcePath, const std::string& zipPath, const char *pw)
@@ -161,7 +161,8 @@ bool compress_zipdir(const std::string& sourcePath, const std::string& zipPath, 
 	zipFile zf = zipOpen(zipPath.c_str(), APPEND_STATUS_CREATE);
 	if (zf == nullptr)
 	{
-		return true;
+        std::cout << "zipOpen: " << zipPath << "error!" << std::endl;
+		return false;
 	}
 	zipOpenNewFileInZip3(zf, sourcePath.c_str(), nullptr, nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED, Z_BEST_COMPRESSION, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nullptr, 0);
 	zipCloseFileInZip(zf);

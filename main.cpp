@@ -68,13 +68,15 @@ int main()
     tmp.package_separator = "001";
     tmp.end_separator = "010";
     tmp.data = base64;
-    client.AddRequest(tmp);
+    // client.AddRequest(tmp);
 
     FileFormat tmp2 = tmp;
     tmp2.node_name = "node456";
-    client.AddRequest(tmp2);
+    // client.AddRequest(tmp2);
 
     std::cout << "Waiting for requests to complete..." << std::endl;
+
+    client.OnFileSizeOver(tmp.domain_name);
 
     return 0;
 }
