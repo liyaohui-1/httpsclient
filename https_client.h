@@ -65,6 +65,7 @@ private:
     std::unordered_map<CURL* ,FileFormat> postData_;
 
     curl_slist* headers_ {nullptr};
+    HttpHeader httpheader_;
     std::string ca_certificate_path_;
     std::string url_;
     

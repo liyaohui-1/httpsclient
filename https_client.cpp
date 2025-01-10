@@ -40,6 +40,7 @@ void HttpsClient::SetUrl(const std::string& url)
 
 void HttpsClient::SetHeader(const HttpHeader& header)
 {
+    httpheader_ = header;
     headers_ = curl_slist_append(headers_, "Content-Type:application/json");
     headers_ = curl_slist_append(headers_, "Accept:application/json");
     headers_ = curl_slist_append(headers_, (std::string{"vin:"}+header.vin).c_str());
@@ -211,15 +212,25 @@ void HttpsClient::UploadChunkThread(int start, int end, int threadID,const std::
     file.read(&readData[0], end - start);
 
     std::cout<<"readData size: " << readData.size() << std::endl;
+    std::string url {url_};
+
+    curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type:application/json");
+    headers = curl_slist_append(headers, "Accept:application/json");
+    headers = curl_slist_append(headers, (std::string{"vin:"}+httpheader_.vin).c_str());
+    headers = curl_slist_append(headers, (std::string{"domain:"}+std::to_string(httpheader_.domain)).c_str());
+    headers = curl_slist_append(headers, (std::string{"compressType:"}+httpheader_.compressType).c_str());
+    headers = curl_slist_append(headers, (std::string{"version:"}+httpheader_.version).c_str());
+    headers = curl_slist_append(headers, (std::string{"standardVersion:"}+httpheader_.standardVersion).c_str());
     
     CURL *curl = curl_easy_init();
     if (curl)
     {   
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
-        curl_easy_setopt(curl, CURLOPT_URL,            url_.c_str());
+        curl_easy_setopt(curl, CURLOPT_URL,            url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,  WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER,     headers_);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER,     headers);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS,     readData.c_str());
     
 		// 执行上传请求
@@ -243,6 +254,7 @@ void HttpsClient::UploadChunkThread(int start, int end, int threadID,const std::
             }
         }
         curl_easy_cleanup(curl);
+        curl_slist_free_all(headers);
     }
 }
 
