@@ -6,12 +6,9 @@
 
 using json = nlohmann::json;
 
-static constexpr const uint8_t MAX_SEND_TIMES = 3;
-
 int main()
 {
-    HttpsClient client {"./ca_tmp.pem"};  //需要设定实际的CA证书
-
+    HttpsClient client {"ca_certificate_path"};
     HttpHeader header;
     header.vin = "LNAAAAAAAP5012345";
     header.domain = 1;
@@ -22,23 +19,7 @@ int main()
     client.SetUrl(std::string{"https://www.baidu.com"});  //测试用百度
     // client.SetUrl(std::string{"https://bc-v2c-eea2-servicedatasync.gacicv.com/"});
     client.SetHeader(header);
-
-    client.RegisterCallback([](void* ptr, size_t size, size_t nmemb, void* userdata)
-    {
-        std::cout << "recv data: " << std::string((char*)ptr, size * nmemb);
-        return size * nmemb;
-    }
-    );
-        
-    if(!client.Init())
-    {
-        std::cout << "client.Init() Failed!" << std::endl;
-        return 0;
-    }
-    else
-    {
-        std::cout << "client.Init() Successed!" << std::endl;
-    }
+    client.StartPerformRequests();
 
     json j; // 首先创建一个空的json对象
     j["timestamp"] = 1647253105799;
@@ -64,8 +45,6 @@ int main()
 
     std::string data = j.dump();
     std::string destChar;
-    static json j_resend;
-
     if(!compress_string(data, destChar))
     {
         std::cout << "compress string error occur." << std::endl;
@@ -78,39 +57,26 @@ int main()
 
     std::string base64 = base64_encode(destChar);
     std::cout << "base64: " << base64 << std::endl;
+    
+    FileFormat tmp;
+    tmp.domain_name = "example.com";
+    tmp.node_name = "node123";
+    tmp.business_type = "serviceA";
+    tmp.function_module_id = "module001";
+    tmp.function_trigger_id = "trigger005";
+    tmp.trigger_timestamp = 1647253105799;
+    tmp.package_separator = "001";
+    tmp.end_separator = "010";
+    tmp.data = base64;
+    // client.AddRequest(tmp);
 
-    for(uint32_t send_times = 1; send_times <= MAX_SEND_TIMES; send_times++)
-    {
-        client.StartSendData(base64);
-        if(client.GetSendResult().get())
-        {
-            std::cout << "Send data Successed!" << std::endl;
-            break;
-        } 
-        else 
-        {
-            std::cout << "Failed to send data times: " << send_times << std::endl;
-        }
+    FileFormat tmp2 = tmp;
+    tmp2.node_name = "node456";
+    // client.AddRequest(tmp2);
 
-        if(send_times == MAX_SEND_TIMES)
-        {
-            // 重发多次失败之后保存为补发文件(暂定为重发MAX_SEND_TIMES次之后)
-            std::cout << "Failed to send data, save to resend file." << std::endl;
-            // 保存为补发文件格式：域名_域内节点名_业务类型_功能模块 ID_功能触发ID_时间_分包符_结束包符_0
-            std::string resend_file_name = "example.com_node123_serviceA_module001_trigger005_20231005143000_001_010_0";
-            j_resend["array"].push_back(base64);
-            std::cout << "resend data: " << j_resend.dump(4) << std::endl;
+    std::cout << "Waiting for requests to complete..." << std::endl;
 
-            std::ofstream ofs(resend_file_name, std::ios::app | std::ios::binary);
-            if(!ofs.is_open())
-            {
-                std::cout << "Failed to open file: " << resend_file_name << std::endl;
-                return 0;
-            }
-            ofs << j_resend.dump(4);
-            ofs.close();
-        }
-    }
+    client.OnFileSizeOver(tmp.domain_name);
 
     return 0;
 }

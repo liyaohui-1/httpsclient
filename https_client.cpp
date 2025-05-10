@@ -1,21 +1,35 @@
 #include "https_client.h"
+#include "nlohmann/json.hpp"
+#include <fstream>
+
+using json = nlohmann::json;
 
 HttpsClient::HttpsClient(const std::string& ca_certificate_path)
-        : ca_certificate_path_(ca_certificate_path), curl_handle_(nullptr) 
+        : ca_certificate_path_(ca_certificate_path), threadPool_(10)
 {
-
+    curl_global_init(CURL_GLOBAL_ALL);
+    multiHandle_ = curl_multi_init();
 }
 
 HttpsClient::~HttpsClient()
 {
-    if(curl_handle_)
-    {
-	    curl_easy_cleanup(curl_handle_);
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    stop_ = true;
     if(workerThread_.joinable())
     {
         workerThread_.join();
     }
+
+    for (auto& handle : curlHandles_) 
+    {
+        if (handle) 
+        {
+            curl_multi_remove_handle(multiHandle_, handle);
+            curl_easy_cleanup(handle);
+        }
+    }
+    curl_multi_cleanup(multiHandle_);
+    curl_slist_free_all(headers_);
     curl_global_cleanup();
 }
 
@@ -26,6 +40,7 @@ void HttpsClient::SetUrl(const std::string& url)
 
 void HttpsClient::SetHeader(const HttpHeader& header)
 {
+    httpheader_ = header;
     headers_ = curl_slist_append(headers_, "Content-Type:application/json");
     headers_ = curl_slist_append(headers_, "Accept:application/json");
     headers_ = curl_slist_append(headers_, (std::string{"vin:"}+header.vin).c_str());
@@ -35,46 +50,27 @@ void HttpsClient::SetHeader(const HttpHeader& header)
     headers_ = curl_slist_append(headers_, (std::string{"standardVersion:"}+header.standardVersion).c_str());
 }
 
-
-void HttpsClient::RegisterCallback(const WriteCallback& callback)
+bool HttpsClient::InitCURLHandle(CURL* curl_handle)
 {
-    cb = callback;
-}
-
-bool HttpsClient::Init()
-{
-    if (!curl_handle_) 
-    { 
-        curl_handle_ = curl_easy_init();
-        if(!curl_handle_)
-        {
-            throw std::runtime_error("Failed to initialize libcurl");
-            return false;
-        }
-    }
-    
     if(access(ca_certificate_path_.c_str(), F_OK) != -1)
     {
         // 如果有服务端的CA证书，则启用SSL验证
         std::cout << "Using CA certificate file: " << ca_certificate_path_ << std::endl;
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, true);
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, true);
-        curl_easy_setopt(curl_handle_, CURLOPT_CAINFO, ca_certificate_path_.c_str());
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, true);
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, true);
+        curl_easy_setopt(curl_handle, CURLOPT_CAINFO, ca_certificate_path_.c_str());
     }
     else
     {
         // 如果没有服务端的CA证书，则跳过SSL验证
         std::cout << "Warning: CA certificate file not found, skipping SSL verification" << std::endl;
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, false);
-        curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYHOST, false);
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, false);
+        curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, false);
     }
 
     if (!url_.empty()) 
     {
-        curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER,      headers_);
-        curl_easy_setopt(curl_handle_, CURLOPT_URL,             url_.c_str());
-        curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION,   cb);
-        curl_easy_setopt(curl_handle_, CURLOPT_TIMEOUT,         1);
+        curl_easy_setopt(curl_handle, CURLOPT_URL,             url_.c_str());
     } 
     else 
     {
@@ -85,28 +81,205 @@ bool HttpsClient::Init()
     return true;
 }
 
-std::future<bool> HttpsClient::GetSendResult()
+bool HttpsClient::AddRequest(const FileFormat& fileFormat)
 {
-    return send_result_.get_future();
-}
-
-void HttpsClient::SendData(const std::string& data)
-{
-    std::cout << "Sending data to " << url_ <<" begin!" <<std::endl;
-    curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
-
-    CURLcode res = curl_easy_perform(curl_handle_);
-    if(res != CURLE_OK)
+    CURL* handle = curl_easy_init();
+    if (!handle) 
     {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                curl_easy_strerror(res));
-         send_result_.set_value(false);
+        std::cout << "Failed to initialize CURL handle." << std::endl;
+        return false;
     }
-    std::cout << "Sending data to " << url_ <<" end!" << std::endl;
-     send_result_.set_value(true);
+    if(!InitCURLHandle(handle))
+    {
+        std::cout << "InitCURLHandle error." << std::endl;
+        return false;
+    }
+
+    curl_easy_setopt(handle, CURLOPT_HTTPHEADER,      headers_);
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,   WriteCallback);
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS,      fileFormat.data.c_str());
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        curlHandles_.push_back(handle);
+        curl_multi_add_handle(multiHandle_, handle);
+
+        if(postData_.find(handle) == postData_.end())
+        {
+            postData_.emplace(handle, fileFormat);
+        }
+    }
+
+    return true;
 }
 
-void HttpsClient::StartSendData(const std::string& data)
+void HttpsClient::SaveReissueData(const FileFormat& fileFormat)
 {
-    workerThread_= std::thread(&HttpsClient::SendData, this, data);
+    json j_resend;
+    std::cout << "Failed to send data, save to resend file." << std::endl;
+    // 保存为补发文件格式：域名_域内节点名_业务类型_功能模块_ID_功能触发ID_时间_分包符_结束包符_0
+    std::string resend_file_name = fileFormat.domain_name + "/" + fileFormat.domain_name + "_" + fileFormat.node_name + "_" + fileFormat.business_type + "_" +  \
+                                   fileFormat.function_module_id + "_" + fileFormat.function_trigger_id + "_" +  \
+                                   std::to_string(fileFormat.trigger_timestamp) + "_" + fileFormat.package_separator + "_" +  \
+                                   fileFormat.end_separator + "_0";
+    j_resend["array"].push_back(fileFormat.data.c_str());
+    std::cout << "resend data: " << j_resend.dump(4) << std::endl;
+
+    std::ofstream ofs(resend_file_name, std::ios::app | std::ios::binary);
+    if(!ofs.is_open())
+    {
+        std::cout << "Failed to open file: " << resend_file_name << std::endl;
+        return;
+    }
+    ofs << j_resend.dump(4) << std::endl;
+    ofs.close();
+}
+
+void HttpsClient::PerformRequests()
+{
+    while(true)
+    {
+        int stillRunning = 0;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(curl_multi_perform(multiHandle_, &stillRunning) != CURLM_OK)
+        {
+            std::cout << "curl_multi_perform() failed !"<< std::endl;
+            return;
+        }
+
+        while (stillRunning) 
+        {
+            int numfds;
+            if(curl_multi_wait(multiHandle_, nullptr, 0, 1000, &numfds) != CURLM_OK)
+            {
+                std::cout << "curl_multi_wait() failed!" << std::endl;
+                break;
+            }
+
+            curl_multi_perform(multiHandle_, &stillRunning);
+        }
+
+        for (size_t i = 0; i < curlHandles_.size(); ++i) 
+        {
+            long responseCode = 0;
+            if(curl_easy_getinfo(curlHandles_[i], CURLINFO_RESPONSE_CODE, &responseCode) != CURLE_OK)
+            {
+                std::cout << "curl_easy_getinfo() "<< "[" << i << "]" <<" failed!" << std::endl;
+                continue;
+            }
+
+            std::cout << "Request " << i << " response code: " << responseCode << std::endl;
+            if (responseCode >= 200 && responseCode < 300) 
+            {
+                std::cout <<"curlHandles_[" << i <<"]:" <<"Request succeeded." << std::endl;
+                break;
+            }
+            else
+            {
+                SaveReissueData(postData_[curlHandles_[i]]);
+                std::cout << "curlHandles_[" << i <<"]:"<<"Request failed with HTTP status code: " << responseCode << std::endl;
+            }
+
+            curl_multi_remove_handle(multiHandle_, curlHandles_[i]);
+            curl_easy_cleanup(curlHandles_[i]);
+        }
+
+        postData_.clear();
+        curlHandles_.clear();
+
+        if(stop_)
+        {
+            break;
+        }
+    }
+}
+
+void HttpsClient::StartPerformRequests()
+{
+    workerThread_ = std::thread(&HttpsClient::PerformRequests, this);
+}
+
+// 每个线程执行的函数体，用于上传指定范围的数据块
+// TODO:如果需要分包上传，则需要修改此函数，在传输的内容结尾加入分包符号或结束符号
+void HttpsClient::UploadChunkThread(int start, int end, int threadID,const std::string& file_path)
+{
+    std::cout << "Thread " << threadID << " start upload chunk from " << start << " to " << end << std::endl;
+    std::fstream file(file_path, std::ios::in | std::ios::binary);
+    uint32_t sendfailtimes = 0;
+
+    std::string readData;
+    readData.resize(end - start);
+    file.read(&readData[0], end - start);
+
+    std::cout<<"readData size: " << readData.size() << std::endl;
+    std::string url {url_};
+
+    curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type:application/json");
+    headers = curl_slist_append(headers, "Accept:application/json");
+    headers = curl_slist_append(headers, (std::string{"vin:"}+httpheader_.vin).c_str());
+    headers = curl_slist_append(headers, (std::string{"domain:"}+std::to_string(httpheader_.domain)).c_str());
+    headers = curl_slist_append(headers, (std::string{"compressType:"}+httpheader_.compressType).c_str());
+    headers = curl_slist_append(headers, (std::string{"version:"}+httpheader_.version).c_str());
+    headers = curl_slist_append(headers, (std::string{"standardVersion:"}+httpheader_.standardVersion).c_str());
+    
+    CURL *curl = curl_easy_init();
+    if (curl)
+    {   
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_easy_setopt(curl, CURLOPT_URL,            url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,  WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER,     headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS,     readData.c_str());
+    
+		// 执行上传请求
+        while(true)
+        {
+            int res = curl_easy_perform(curl);
+            if(res == CURLE_OK)
+            {
+                std::cout << "Thread " << threadID << " upload success!" << std::endl;
+                break;
+            }
+            else
+            {
+                std::cout << "Thread " << threadID << " upload failed, error code: " << res << std::endl;
+                if(++sendfailtimes >= MAX_SEND_FAIL_TIMES)
+                {
+                    std::cout << "Thread " << threadID << " upload failed, max retry times reached, exit..." << std::endl;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10)); 
+            }
+        }
+        curl_easy_cleanup(curl);
+        curl_slist_free_all(headers);
+    }
+}
+
+void HttpsClient::OnFileSizeOver(const std::string& file_path)
+{
+    if(compress_zipdir(file_path, file_path + ".zip", nullptr))
+    {
+        std::cout << "compress_zipdir success." << std::endl;
+    }
+    else
+    {
+        std::cout << "compress_zipdir failed." << std::endl;
+        return;
+    }
+
+    uint32_t fileSize = get_file_size(file_path + ".zip"); // 获取文件总大小
+    uint32_t chunkNum = (fileSize  + CHUNK_SIZE - 1) / CHUNK_SIZE; // 计算需要分块的数量
+
+    std::cout << "fileSize: " << fileSize << " chunkNum: " << chunkNum << std::endl;
+
+	// 这里使用线程池，每个线程负责上传一个数据块，线程的创建数量与分块的数量一致
+	for (int i = 0; i < chunkNum; ++i)
+	{
+		int start = i * CHUNK_SIZE;
+		int end = (i == chunkNum - 1) ? fileSize : start + CHUNK_SIZE - 1;
+        threadPool_.Enqueue(&HttpsClient::UploadChunkThread, this, start, end, i, file_path + ".zip");
+	}
 }
